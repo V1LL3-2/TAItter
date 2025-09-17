@@ -10,7 +10,7 @@ ini_set('session.use_only_cookies', 1);
 ini_set('session.cookie_secure', 0); // Set to 1 for HTTPS
 session_start();
 
-// Error reporting
+// Error reporting (disable in production)
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
@@ -18,9 +18,13 @@ ini_set('display_errors', 1);
 date_default_timezone_set('UTC');
 
 // CORS headers for API
-header('Access-Control-Allow-Origin: *');
+if (isset($_SERVER['HTTP_ORIGIN'])) {
+    header('Access-Control-Allow-Origin: ' . $_SERVER['HTTP_ORIGIN']);
+    header('Access-Control-Allow-Credentials: true');
+}
+
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
 
 // Handle preflight requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -46,8 +50,8 @@ function verify_csrf_token($token) {
 
 function json_response($data, $status_code = 200) {
     http_response_code($status_code);
-    header('Content-Type: application/json');
-    echo json_encode($data);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
     exit();
 }
 
@@ -69,7 +73,7 @@ function require_login() {
         if (strpos($_SERVER['REQUEST_URI'], '/api/') !== false) {
             json_response(['error' => 'Authentication required'], 401);
         } else {
-            redirect('/login.php');
+            redirect('login.php');
         }
     }
 }

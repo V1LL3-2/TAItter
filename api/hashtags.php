@@ -1,11 +1,38 @@
 <?php
-require_once '../config/config.php';
-require_once '../config/database.php';
-require_once '../models/Hashtag.php';
+// Clean up any output buffering and suppress errors in JSON output
+ob_start();
+error_reporting(0); // Suppress PHP errors in JSON responses
+ini_set('display_errors', 0);
 
-$database = new Database();
-$db = $database->getConnection();
-$hashtag = new Hashtag($db);
+// Get the correct path to the root directory
+$root_path = dirname(__DIR__);
+require_once $root_path . '/config/config.php';
+require_once $root_path . '/config/database.php';
+require_once $root_path . '/models/Hashtag.php';
+
+// Clean the output buffer to ensure no HTML gets mixed with JSON
+ob_clean();
+
+// Set proper JSON headers
+header('Content-Type: application/json; charset=utf-8');
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
+
+// Handle preflight requests
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit();
+}
+
+try {
+    $database = new Database();
+    $db = $database->getConnection();
+    $hashtag = new Hashtag($db);
+} catch (Exception $e) {
+    echo json_encode(['error' => 'Database connection failed']);
+    exit();
+}
 
 $method = $_SERVER['REQUEST_METHOD'];
 
@@ -20,7 +47,8 @@ switch($method) {
         handleDelete();
         break;
     default:
-        json_response(['error' => 'Method not allowed'], 405);
+        echo json_encode(['error' => 'Method not allowed']);
+        exit();
 }
 
 function handleGet() {
@@ -29,102 +57,140 @@ function handleGet() {
     $action = $_GET['action'] ?? 'all';
     $limit = min(intval($_GET['limit'] ?? 20), 100);
     
-    switch($action) {
-        case 'all':
-            getAllHashtags($limit);
-            break;
-        case 'search':
-            searchHashtags($limit);
-            break;
-        case 'followed':
-            getFollowedHashtags();
-            break;
-        default:
-            json_response(['error' => 'Invalid action'], 400);
+    try {
+        switch($action) {
+            case 'all':
+                getAllHashtags($limit);
+                break;
+            case 'search':
+                searchHashtags($limit);
+                break;
+            case 'followed':
+                getFollowedHashtags();
+                break;
+            default:
+                echo json_encode(['error' => 'Invalid action']);
+                exit();
+        }
+    } catch (Exception $e) {
+        echo json_encode(['error' => 'Server error']);
+        exit();
     }
 }
 
 function handlePost() {
     global $hashtag;
     
-    require_login();
-    
-    $data = json_decode(file_get_contents("php://input"));
-    
-    if(empty($data->hashtag_id)) {
-        json_response(['error' => 'Hashtag ID is required'], 400);
-        return;
+    try {
+        if(!is_logged_in()) {
+            echo json_encode(['error' => 'Authentication required']);
+            exit();
+        }
+        
+        $input = file_get_contents("php://input");
+        $data = json_decode($input);
+        
+        if(empty($data->hashtag_id)) {
+            echo json_encode(['error' => 'Hashtag ID is required']);
+            exit();
+        }
+        
+        if($hashtag->follow(get_current_user_id(), $data->hashtag_id)) {
+            echo json_encode(['message' => 'Hashtag followed successfully']);
+        } else {
+            echo json_encode(['error' => 'Unable to follow hashtag']);
+        }
+    } catch (Exception $e) {
+        echo json_encode(['error' => 'Server error']);
     }
-    
-    if($hashtag->follow(get_current_user_id(), $data->hashtag_id)) {
-        json_response(['message' => 'Hashtag followed successfully']);
-    } else {
-        json_response(['error' => 'Unable to follow hashtag'], 500);
-    }
+    exit();
 }
 
 function handleDelete() {
     global $hashtag;
     
-    require_login();
-    
-    $hashtag_id = $_GET['id'] ?? null;
-    
-    if(!$hashtag_id) {
-        json_response(['error' => 'Hashtag ID is required'], 400);
-        return;
+    try {
+        if(!is_logged_in()) {
+            echo json_encode(['error' => 'Authentication required']);
+            exit();
+        }
+        
+        $hashtag_id = $_GET['id'] ?? null;
+        
+        if(!$hashtag_id) {
+            echo json_encode(['error' => 'Hashtag ID is required']);
+            exit();
+        }
+        
+        if($hashtag->unfollow(get_current_user_id(), $hashtag_id)) {
+            echo json_encode(['message' => 'Hashtag unfollowed successfully']);
+        } else {
+            echo json_encode(['error' => 'Unable to unfollow hashtag']);
+        }
+    } catch (Exception $e) {
+        echo json_encode(['error' => 'Server error']);
     }
-    
-    if($hashtag->unfollow(get_current_user_id(), $hashtag_id)) {
-        json_response(['message' => 'Hashtag unfollowed successfully']);
-    } else {
-        json_response(['error' => 'Unable to unfollow hashtag'], 500);
-    }
+    exit();
 }
 
 function getAllHashtags($limit) {
     global $hashtag;
     
-    $hashtags = $hashtag->getAll($limit);
-    
-    json_response([
-        'hashtags' => $hashtags,
-        'count' => count($hashtags)
-    ]);
+    try {
+        $hashtags = $hashtag->getAll($limit);
+        
+        echo json_encode([
+            'hashtags' => $hashtags,
+            'count' => count($hashtags)
+        ]);
+    } catch (Exception $e) {
+        echo json_encode(['error' => 'Failed to load hashtags']);
+    }
+    exit();
 }
 
 function searchHashtags($limit) {
     global $hashtag;
     
-    $query = $_GET['q'] ?? null;
-    
-    if(!$query) {
-        json_response(['error' => 'Search query is required'], 400);
-        return;
+    try {
+        $query = $_GET['q'] ?? null;
+        
+        if(!$query) {
+            echo json_encode(['error' => 'Search query is required']);
+            exit();
+        }
+        
+        $hashtags = $hashtag->search($query, $limit);
+        
+        echo json_encode([
+            'query' => $query,
+            'hashtags' => $hashtags,
+            'count' => count($hashtags)
+        ]);
+    } catch (Exception $e) {
+        echo json_encode(['error' => 'Failed to search hashtags']);
     }
-    
-    $hashtags = $hashtag->search($query, $limit);
-    
-    json_response([
-        'query' => $query,
-        'hashtags' => $hashtags,
-        'count' => count($hashtags)
-    ]);
+    exit();
 }
 
 function getFollowedHashtags() {
     global $hashtag;
     
-    if(!is_logged_in()) {
-        json_response(['error' => 'Authentication required'], 401);
-        return;
+    try {
+        if(!is_logged_in()) {
+            echo json_encode(['error' => 'Authentication required']);
+            exit();
+        }
+        
+        $hashtags = $hashtag->getFollowedByUser(get_current_user_id());
+        
+        echo json_encode([
+            'hashtags' => $hashtags,
+            'count' => count($hashtags)
+        ]);
+    } catch (Exception $e) {
+        echo json_encode(['error' => 'Failed to load followed hashtags']);
     }
-    
-    $hashtags = $hashtag->getFollowedByUser(get_current_user_id());
-    
-    json_response([
-        'hashtags' => $hashtags,
-        'count' => count($hashtags)
-    ]);
+    exit();
 }
 ?>

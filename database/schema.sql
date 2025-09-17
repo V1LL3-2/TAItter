@@ -1,7 +1,7 @@
--- TAItter Database Schema
+-- TAItter Database Schema - Fixed Version
 -- Create database
-CREATE DATABASE taitter_db;
-USE taitter_db;
+CREATE DATABASE IF NOT EXISTS taitter;
+USE taitter;
 
 -- Users table
 CREATE TABLE users (
@@ -11,7 +11,8 @@ CREATE TABLE users (
     password VARCHAR(255) NOT NULL,
     description TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    last_login TIMESTAMP NULL
 );
 
 -- Posts table
@@ -42,8 +43,8 @@ CREATE TABLE post_hashtags (
     UNIQUE KEY unique_post_hashtag (post_id, hashtag_id)
 );
 
--- Mentions table
-CREATE TABLE mentions (
+-- Post mentions table (fixed name)
+CREATE TABLE post_mentions (
     id INT PRIMARY KEY AUTO_INCREMENT,
     post_id INT NOT NULL,
     mentioned_user_id INT NOT NULL,
@@ -52,19 +53,19 @@ CREATE TABLE mentions (
     UNIQUE KEY unique_post_mention (post_id, mentioned_user_id)
 );
 
--- User follows (for @user likes)
-CREATE TABLE user_follows (
+-- User likes users table (fixed name to match models)
+CREATE TABLE user_likes_users (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    follower_id INT NOT NULL,
-    following_id INT NOT NULL,
+    liker_id INT NOT NULL,
+    liked_user_id INT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (follower_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (following_id) REFERENCES users(id) ON DELETE CASCADE,
-    UNIQUE KEY unique_follow (follower_id, following_id)
+    FOREIGN KEY (liker_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (liked_user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_like (liker_id, liked_user_id)
 );
 
--- Hashtag follows
-CREATE TABLE hashtag_follows (
+-- User follows hashtags table (fixed name)
+CREATE TABLE user_follows_hashtags (
     id INT PRIMARY KEY AUTO_INCREMENT,
     user_id INT NOT NULL,
     hashtag_id INT NOT NULL,
@@ -74,52 +75,40 @@ CREATE TABLE hashtag_follows (
     UNIQUE KEY unique_hashtag_follow (user_id, hashtag_id)
 );
 
--- Insert sample data
+-- Insert sample data with correct password hashes
 INSERT INTO users (username, email, password, description) VALUES
-('alice', 'alice@example.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'AI enthusiast and developer'),
-('bob', 'bob@example.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Tech blogger and coffee lover'),
-('charlie', 'charlie@example.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Machine learning researcher');
+('admin', 'admin@taitter.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Administrator account'),
+('john_doe', 'john@example.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Software developer and tech enthusiast'),
+('jane_smith', 'jane@example.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'UI/UX Designer passionate about user experience'),
+('bob', 'bob@example.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Tech blogger and coffee lover');
 
+-- Insert hashtags
 INSERT INTO hashtags (tag) VALUES 
-('#ai'), ('#tech'), ('#coding'), ('#javascript'), ('#php'), ('#machinelearning');
+('TAItter'), ('innovation'), ('tech'), ('collaboration'), ('teamwork'), ('design'), ('development');
 
+-- Insert sample posts
 INSERT INTO posts (user_id, content) VALUES
-(1, 'Just discovered an amazing #ai tool for developers! @bob you should check this out.'),
-(2, 'Working on a new #tech blog post about modern web development #javascript #php'),
-(3, 'Excited about the latest developments in #machinelearning and #ai research!'),
-(1, 'TAItter is the future of social media! #tech #coding'),
-(2, '@alice great point about AI tools! The #coding community is amazing.');
+(1, 'Welcome to #TAItter! The future of social media is here. #innovation #tech'),
+(2, 'Anyone else excited about the latest @jane_smith designs? #collaboration'),
+(3, 'Thanks @john_doe! Working together is always great. #teamwork'),
+(1, 'Building the next generation of social platforms. #development #tech');
 
 -- Link hashtags to posts
 INSERT INTO post_hashtags (post_id, hashtag_id) VALUES
-(1, 1), -- #ai
-(1, 2), -- #tech (assuming we add it)
-(2, 2), -- #tech
-(2, 4), -- #javascript
-(2, 5), -- #php
-(3, 6), -- #machinelearning
-(3, 1), -- #ai
-(4, 2), -- #tech
-(4, 3), -- #coding
-(5, 3); -- #coding
+(1, 1), (1, 2), (1, 3), -- Post 1: TAItter, innovation, tech
+(2, 4), -- Post 2: collaboration
+(3, 5), -- Post 3: teamwork
+(4, 6), (4, 3); -- Post 4: development, tech
 
 -- Add mentions
-INSERT INTO mentions (post_id, mentioned_user_id) VALUES
-(1, 2), -- @bob in post 1
-(5, 1); -- @alice in post 5
+INSERT INTO post_mentions (post_id, mentioned_user_id) VALUES
+(2, 3), -- @jane_smith in post 2
+(3, 2); -- @john_doe in post 3
 
--- Add some follows
-INSERT INTO user_follows (follower_id, following_id) VALUES
-(1, 2), -- alice follows bob
-(2, 1), -- bob follows alice
-(3, 1), -- charlie follows alice
-(1, 3); -- alice follows charlie
+-- Add some sample follows and likes
+INSERT INTO user_likes_users (liker_id, liked_user_id) VALUES
+(1, 2), (1, 3), (2, 1), (2, 3), (3, 1);
 
 -- Add hashtag follows
-INSERT INTO hashtag_follows (user_id, hashtag_id) VALUES
-(1, 1), -- alice follows #ai
-(1, 2), -- alice follows #tech
-(2, 2), -- bob follows #tech
-(2, 4), -- bob follows #javascript
-(3, 1), -- charlie follows #ai
-(3, 6); -- charlie follows #machinelearning
+INSERT INTO user_follows_hashtags (user_id, hashtag_id) VALUES
+(1, 1), (1, 2), (1, 3), (2, 1), (2, 4), (3, 1), (3, 5);

@@ -1,4 +1,4 @@
-// TAItter - Main JavaScript Application
+// TAItter - Complete Working JavaScript Application
 
 class TAItterApp {
     constructor() {
@@ -7,8 +7,13 @@ class TAItterApp {
 
     init() {
         this.setupEventListeners();
-        this.loadSidebarData();
         this.setupPostModal();
+        // Load sidebar data with working APIs
+        if (this.isLoggedIn()) {
+            setTimeout(() => {
+                this.loadSidebarData();
+            }, 500);
+        }
     }
 
     setupEventListeners() {
@@ -22,30 +27,27 @@ class TAItterApp {
                 charCount.textContent = count;
                 
                 if (count > 144) {
-                    charCount.style.color = 'var(--danger-color)';
+                    charCount.style.color = '#e0245e';
                 } else if (count > 120) {
-                    charCount.style.color = 'var(--warning-color)';
+                    charCount.style.color = '#ffad1f';
                 } else {
-                    charCount.style.color = 'var(--text-muted)';
+                    charCount.style.color = '#aab8c2';
                 }
             });
         }
 
-        // Like user buttons
+        // Like user and follow hashtag buttons
         document.addEventListener('click', (e) => {
             if (e.target.closest('.like-user-btn')) {
+                e.preventDefault();
                 this.handleLikeUser(e.target.closest('.like-user-btn'));
             }
             
             if (e.target.closest('.follow-hashtag-btn')) {
+                e.preventDefault();
                 this.handleFollowHashtags(e.target.closest('.follow-hashtag-btn'));
             }
         });
-
-        // Auto-refresh feed every 30 seconds
-        setInterval(() => {
-            this.refreshFeed();
-        }, 30000);
     }
 
     setupPostModal() {
@@ -65,7 +67,7 @@ class TAItterApp {
                 mutations.forEach((mutation) => {
                     if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
                         if (modal.classList.contains('show')) {
-                            postContent.focus();
+                            setTimeout(() => postContent.focus(), 100);
                         }
                     }
                 });
@@ -77,24 +79,42 @@ class TAItterApp {
     async loadSidebarData() {
         if (!this.isLoggedIn()) return;
 
+        // Load trending hashtags
         try {
-            // Load trending hashtags
-            const hashtagsResponse = await fetch('api/hashtags.php?action=all&limit=5');
-            const hashtagsData = await hashtagsResponse.json();
-            
-            if (hashtagsData.hashtags) {
-                this.renderTrendingHashtags(hashtagsData.hashtags);
-            }
-
-            // Load suggested users
-            const usersResponse = await fetch('api/users.php?action=search&q=');
-            const usersData = await usersResponse.json();
-            
-            if (usersData.users) {
-                this.renderSuggestedUsers(usersData.users.slice(0, 5));
+            const hashtagsContainer = document.getElementById('trending-hashtags');
+            if (hashtagsContainer) {
+                const response = await fetch('api/hashtags.php?action=all&limit=5');
+                if (response.ok) {
+                    const text = await response.text();
+                    if (text.trim().startsWith('{')) {
+                        const data = JSON.parse(text);
+                        if (data && data.hashtags) {
+                            this.renderTrendingHashtags(data.hashtags);
+                        }
+                    }
+                }
             }
         } catch (error) {
-            console.error('Error loading sidebar data:', error);
+            console.log('Could not load hashtags');
+        }
+
+        // Load suggested users
+        try {
+            const usersContainer = document.getElementById('suggested-users');
+            if (usersContainer) {
+                const response = await fetch('api/users.php?action=search&q=');
+                if (response.ok) {
+                    const text = await response.text();
+                    if (text.trim().startsWith('{')) {
+                        const data = JSON.parse(text);
+                        if (data && data.users) {
+                            this.renderSuggestedUsers(data.users.slice(0, 5));
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            console.log('Could not load users');
         }
     }
 
@@ -109,10 +129,10 @@ class TAItterApp {
 
         const html = hashtags.map(hashtag => `
             <div class="hashtag-item">
-                <a href="hashtag.php?tag=${hashtag.tag}" class="hashtag-link">
-                    #${hashtag.tag}
+                <a href="hashtag.php?tag=${encodeURIComponent(hashtag.tag)}" class="hashtag-link">
+                    #${this.escapeHtml(hashtag.tag)}
                 </a>
-                <span class="post-count">${hashtag.post_count} posts</span>
+                <span class="post-count">${hashtag.post_count || 0} posts</span>
             </div>
         `).join('');
 
@@ -128,13 +148,17 @@ class TAItterApp {
             return;
         }
 
-        const html = users.map(user => `
+        // Filter out current user
+        const currentUserId = this.getCurrentUserId();
+        const filteredUsers = users.filter(user => user.id != currentUserId);
+
+        const html = filteredUsers.map(user => `
             <div class="user-item">
                 <div class="user-info">
-                    <div class="avatar">${user.username.charAt(0).toUpperCase()}</div>
+                    <div class="avatar">${this.escapeHtml(user.username.charAt(0).toUpperCase())}</div>
                     <div class="user-details">
-                        <a href="profile.php?username=${user.username}" class="username">@${user.username}</a>
-                        <p class="user-description">${user.description || 'No description'}</p>
+                        <a href="profile.php?username=${encodeURIComponent(user.username)}" class="username">@${this.escapeHtml(user.username)}</a>
+                        <p class="user-description">${this.escapeHtml(user.description || 'No description')}</p>
                     </div>
                 </div>
                 <button class="btn btn-sm like-user-btn" data-user-id="${user.id}">
@@ -157,6 +181,7 @@ class TAItterApp {
     closePostModal() {
         const modal = document.getElementById('post-modal');
         const postContent = document.getElementById('post-content');
+        const charCount = document.getElementById('char-count');
         
         if (modal) {
             modal.classList.remove('show');
@@ -165,7 +190,11 @@ class TAItterApp {
         
         if (postContent) {
             postContent.value = '';
-            document.getElementById('char-count').textContent = '0';
+        }
+        
+        if (charCount) {
+            charCount.textContent = '0';
+            charCount.style.color = '#aab8c2';
         }
     }
 
@@ -175,12 +204,12 @@ class TAItterApp {
 
         const content = postContent.value.trim();
         if (!content) {
-            this.showAlert('Please enter some content for your post', 'error');
+            alert('Please enter some content for your post');
             return;
         }
 
         if (content.length > 144) {
-            this.showAlert('Post content must be 144 characters or less', 'error');
+            alert('Post content must be 144 characters or less');
             return;
         }
 
@@ -192,99 +221,35 @@ class TAItterApp {
                 headers: {
                     'Content-Type': 'application/json',
                 },
+                credentials: 'same-origin',
                 body: JSON.stringify({ content })
             });
 
-            const data = await response.json();
-
             if (response.ok) {
                 this.closePostModal();
-                this.refreshFeed();
-                this.showAlert('Post created successfully!', 'success');
+                alert('Post created successfully!');
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
             } else {
-                this.showAlert(data.error || 'Failed to create post', 'error');
+                const data = await response.json();
+                alert(data.error || 'Failed to create post');
             }
         } catch (error) {
-            console.error('Error creating post:', error);
-            this.showAlert('Network error. Please try again.', 'error');
+            console.log('Error creating post:', error);
+            alert('Network error. Please try again.');
         } finally {
             this.showLoading(false);
         }
     }
 
-    async refreshFeed() {
-        const container = document.getElementById('posts-container');
-        if (!container) return;
-
-        try {
-            const response = await fetch('api/posts.php?action=timeline&limit=20');
-            const data = await response.json();
-
-            if (response.ok && data.posts) {
-                this.renderPosts(data.posts);
-            }
-        } catch (error) {
-            console.error('Error refreshing feed:', error);
-        }
-    }
-
-    renderPosts(posts) {
-        const container = document.getElementById('posts-container');
-        if (!container) return;
-
-        if (posts.length === 0) {
-            container.innerHTML = `
-                <div class="empty-state">
-                    <i class="fas fa-comments"></i>
-                    <h3>No posts yet</h3>
-                    <p>Be the first to share something!</p>
-                </div>
-            `;
-            return;
-        }
-
-        const html = posts.map(post => `
-            <div class="post" data-post-id="${post.id}">
-                <div class="post-header">
-                    <div class="user-info">
-                        <div class="avatar">${post.username.charAt(0).toUpperCase()}</div>
-                        <div class="user-details">
-                            <a href="profile.php?username=${post.username}" class="username">
-                                @${post.username}
-                            </a>
-                            <span class="post-time">${this.timeAgo(post.created_at)}</span>
-                        </div>
-                    </div>
-                    ${this.isLoggedIn() && post.user_id != this.getCurrentUserId() ? `
-                        <button class="btn btn-sm like-user-btn" data-user-id="${post.user_id}">
-                            <i class="far fa-heart"></i>
-                        </button>
-                    ` : ''}
-                </div>
-                
-                <div class="post-content">
-                    ${this.formatPostContent(post.content)}
-                </div>
-                
-                <div class="post-actions">
-                    <button class="action-btn like-user-btn" data-user-id="${post.user_id}">
-                        <i class="far fa-heart"></i>
-                        <span>Like User</span>
-                    </button>
-                    <button class="action-btn follow-hashtag-btn" data-hashtags='${JSON.stringify(this.extractHashtags(post.content))}'>
-                        <i class="fas fa-hashtag"></i>
-                        <span>Follow Tags</span>
-                    </button>
-                </div>
-            </div>
-        `).join('');
-
-        container.innerHTML = html;
+    refreshFeed() {
+        window.location.reload();
     }
 
     async handleLikeUser(button) {
         if (!this.isLoggedIn()) {
-            this.showAlert('Please login to like users', 'error');
+            alert('Please login to like users');
             return;
         }
 
@@ -293,144 +258,126 @@ class TAItterApp {
 
         const isLiked = button.querySelector('i').classList.contains('fas');
         
+        // Optimistic UI update
+        const icon = button.querySelector('i');
+        if (isLiked) {
+            icon.classList.remove('fas');
+            icon.classList.add('far');
+        } else {
+            icon.classList.remove('far');
+            icon.classList.add('fas');
+        }
+
         try {
-            const response = await fetch('api/users.php', {
-                method: isLiked ? 'DELETE' : 'POST',
+            const url = isLiked ? `api/users.php?id=${userId}` : 'api/users.php';
+            const method = isLiked ? 'DELETE' : 'POST';
+            const body = isLiked ? null : JSON.stringify({ user_id: parseInt(userId) });
+            
+            const response = await fetch(url, {
+                method: method,
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ user_id: userId })
+                credentials: 'same-origin',
+                body: body
             });
 
-            const data = await response.json();
-
             if (response.ok) {
-                const icon = button.querySelector('i');
+                const data = await response.json();
+                console.log('Like action successful:', data.message);
+            } else {
+                // Revert the UI change on error
                 if (isLiked) {
-                    icon.classList.remove('fas');
-                    icon.classList.add('far');
-                } else {
                     icon.classList.remove('far');
                     icon.classList.add('fas');
+                } else {
+                    icon.classList.remove('fas');
+                    icon.classList.add('far');
                 }
-                this.showAlert(data.message, 'success');
-            } else {
-                this.showAlert(data.error || 'Failed to like user', 'error');
+                console.log('Like action failed');
             }
         } catch (error) {
-            console.error('Error liking user:', error);
-            this.showAlert('Network error. Please try again.', 'error');
+            // Revert the UI change on error
+            if (isLiked) {
+                icon.classList.remove('far');
+                icon.classList.add('fas');
+            } else {
+                icon.classList.remove('fas');
+                icon.classList.add('far');
+            }
+            console.log('Network error for like action:', error);
         }
     }
 
     async handleFollowHashtags(button) {
         if (!this.isLoggedIn()) {
-            this.showAlert('Please login to follow hashtags', 'error');
+            alert('Please login to follow hashtags');
             return;
         }
 
         const hashtags = JSON.parse(button.dataset.hashtags || '[]');
         if (hashtags.length === 0) {
-            this.showAlert('No hashtags found in this post', 'info');
+            alert('No hashtags found in this post');
             return;
         }
 
         try {
             for (const hashtag of hashtags) {
-                // First, get or create hashtag
+                // First, get hashtag info
                 const hashtagResponse = await fetch(`api/hashtags.php?action=search&q=${hashtag}`);
-                const hashtagData = await hashtagResponse.json();
-                
-                if (hashtagData.hashtags && hashtagData.hashtags.length > 0) {
-                    const hashtagId = hashtagData.hashtags[0].id;
-                    
-                    // Follow the hashtag
-                    await fetch('api/hashtags.php', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({ hashtag_id: hashtagId })
-                    });
+                if (hashtagResponse.ok) {
+                    const text = await hashtagResponse.text();
+                    if (text.trim().startsWith('{')) {
+                        const hashtagData = JSON.parse(text);
+                        
+                        if (hashtagData && hashtagData.hashtags && hashtagData.hashtags.length > 0) {
+                            const hashtagId = hashtagData.hashtags[0].id;
+                            
+                            // Follow the hashtag
+                            await fetch('api/hashtags.php', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                credentials: 'same-origin',
+                                body: JSON.stringify({ hashtag_id: hashtagId })
+                            });
+                        }
+                    }
                 }
             }
             
-            this.showAlert(`Following ${hashtags.length} hashtag(s)`, 'success');
+            alert(`Following ${hashtags.length} hashtag(s)!`);
         } catch (error) {
-            console.error('Error following hashtags:', error);
-            this.showAlert('Network error. Please try again.', 'error');
+            console.log('Error following hashtags:', error);
+            alert('Could not follow hashtags. Please try again.');
         }
     }
 
     async logout() {
-        try {
-            const response = await fetch('api/auth.php', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ action: 'logout' })
-            });
-
-            if (response.ok) {
-                window.location.href = 'login.php';
+        if (confirm('Are you sure you want to logout?')) {
+            try {
+                // Try POST request first
+                const response = await fetch('api/auth.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ action: 'logout' })
+                });
+                
+                if (response.ok) {
+                    window.location.href = 'login.php';
+                } else {
+                    // Fallback: direct redirect
+                    window.location.href = 'api/auth.php';
+                }
+            } catch (error) {
+                console.log('Logout error:', error);
+                // Fallback: direct redirect
+                window.location.href = 'api/auth.php';
             }
-        } catch (error) {
-            console.error('Error logging out:', error);
-            window.location.href = 'login.php';
-        }
-    }
-
-    formatPostContent(content) {
-        // Convert hashtags to clickable links
-        content = content.replace(/#(\w+)/g, '<a href="hashtag.php?tag=$1" class="hashtag">#$1</a>');
-        
-        // Convert mentions to clickable links
-        content = content.replace(/@(\w+)/g, '<a href="profile.php?username=$1" class="mention">@$1</a>');
-        
-        // Convert line breaks to HTML
-        content = content.replace(/\n/g, '<br>');
-        
-        return content;
-    }
-
-    extractHashtags(content) {
-        const matches = content.match(/#(\w+)/g);
-        return matches ? matches.map(tag => tag.substring(1)) : [];
-    }
-
-    timeAgo(dateString) {
-        const now = new Date();
-        const date = new Date(dateString);
-        const diffInSeconds = Math.floor((now - date) / 1000);
-
-        if (diffInSeconds < 60) return 'just now';
-        if (diffInSeconds < 3600) return Math.floor(diffInSeconds / 60) + 'm ago';
-        if (diffInSeconds < 86400) return Math.floor(diffInSeconds / 3600) + 'h ago';
-        if (diffInSeconds < 2592000) return Math.floor(diffInSeconds / 86400) + 'd ago';
-        if (diffInSeconds < 31536000) return Math.floor(diffInSeconds / 2592000) + 'mo ago';
-        return Math.floor(diffInSeconds / 31536000) + 'y ago';
-    }
-
-    showAlert(message, type = 'info') {
-        // Remove existing alerts
-        const existingAlerts = document.querySelectorAll('.alert');
-        existingAlerts.forEach(alert => alert.remove());
-
-        // Create new alert
-        const alert = document.createElement('div');
-        alert.className = `alert alert-${type}`;
-        alert.textContent = message;
-
-        // Insert at top of main content
-        const mainContent = document.querySelector('.main-content');
-        if (mainContent) {
-            mainContent.insertBefore(alert, mainContent.firstChild);
-            
-            // Auto-remove after 5 seconds
-            setTimeout(() => {
-                alert.remove();
-            }, 5000);
         }
     }
 
@@ -447,12 +394,19 @@ class TAItterApp {
 
     isLoggedIn() {
         return document.body.classList.contains('logged-in') || 
-               document.querySelector('.logout-btn') !== null;
+               document.querySelector('.logout-btn') !== null ||
+               window.currentUserId != null;
     }
 
     getCurrentUserId() {
-        // This would need to be set by the server-side code
         return window.currentUserId || null;
+    }
+
+    escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 }
 
@@ -490,67 +444,88 @@ function logout() {
 // Initialize app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     window.app = new TAItterApp();
+    console.log('TAItter app initialized successfully');
 });
 
-// Add some CSS for dynamic elements
-const style = document.createElement('style');
-style.textContent = `
-    .hashtag-item, .user-item {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 0.75rem 0;
-        border-bottom: 1px solid var(--border-color);
-    }
-    
-    .hashtag-item:last-child, .user-item:last-child {
-        border-bottom: none;
-    }
-    
-    .hashtag-link {
-        color: var(--primary-color);
-        text-decoration: none;
-        font-weight: 500;
-    }
-    
-    .hashtag-link:hover {
-        text-decoration: underline;
-    }
-    
-    .post-count {
-        color: var(--text-muted);
-        font-size: 0.85rem;
-    }
-    
-    .user-item .user-info {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        flex: 1;
-    }
-    
-    .user-item .avatar {
-        width: 32px;
-        height: 32px;
-        font-size: 0.9rem;
-    }
-    
-    .user-item .user-details {
-        flex: 1;
-    }
-    
-    .user-item .username {
-        font-size: 0.9rem;
-        font-weight: 500;
-    }
-    
-    .user-item .user-description {
-        font-size: 0.8rem;
-        color: var(--text-muted);
-        margin: 0;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-`;
-document.head.appendChild(style);
+// Add CSS for dynamic elements
+if (!document.getElementById('dynamic-styles')) {
+    const style = document.createElement('style');
+    style.id = 'dynamic-styles';
+    style.textContent = `
+        .hashtag-item, .user-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .hashtag-item:last-child, .user-item:last-child {
+            border-bottom: none;
+        }
+        
+        .hashtag-link {
+            color: var(--primary-color);
+            text-decoration: none;
+            font-weight: 500;
+        }
+        
+        .hashtag-link:hover {
+            text-decoration: underline;
+        }
+        
+        .post-count {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+        
+        .user-item .user-info {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            flex: 1;
+        }
+        
+        .user-item .avatar {
+            width: 32px;
+            height: 32px;
+            background: var(--primary-color);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+        
+        .user-item .user-details {
+            flex: 1;
+        }
+        
+        .user-item .username {
+            font-size: 0.9rem;
+            font-weight: 500;
+            text-decoration: none;
+            color: var(--text-primary);
+        }
+        
+        .user-item .username:hover {
+            color: var(--primary-color);
+        }
+        
+        .user-item .user-description {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .text-muted {
+            color: var(--text-muted);
+        }
+    `;
+    document.head.appendChild(style);
+}

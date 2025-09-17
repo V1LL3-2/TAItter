@@ -1,6 +1,4 @@
 <?php
-require_once 'config/database.php';
-
 class User {
     private $conn;
     private $table_name = "users";
@@ -11,7 +9,6 @@ class User {
     public $description;
     public $password_hash;
     public $created_at;
-    public $updated_at;
     public $last_login;
 
     public function __construct($db) {
@@ -21,7 +18,7 @@ class User {
     // Create new user
     public function create() {
         $query = "INSERT INTO " . $this->table_name . " 
-                  SET email=:email, username=:username, description=:description, password_hash=:password_hash";
+                  SET email=:email, username=:username, description=:description, password=:password_hash";
 
         $stmt = $this->conn->prepare($query);
 
@@ -43,7 +40,7 @@ class User {
 
     // Check if email exists
     public function emailExists() {
-        $query = "SELECT id, email, username, password_hash, description, created_at, last_login
+        $query = "SELECT id, email, username, password, description, created_at, last_login
                   FROM " . $this->table_name . " 
                   WHERE email = :email 
                   LIMIT 0,1";
@@ -57,7 +54,7 @@ class User {
             $this->id = $row['id'];
             $this->email = $row['email'];
             $this->username = $row['username'];
-            $this->password_hash = $row['password_hash'];
+            $this->password_hash = $row['password'];
             $this->description = $row['description'];
             $this->created_at = $row['created_at'];
             $this->last_login = $row['last_login'];

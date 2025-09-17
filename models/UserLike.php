@@ -1,6 +1,4 @@
 <?php
-require_once 'config/database.php';
-
 class UserLike {
     private $conn;
     private $table_name = "user_likes_users";

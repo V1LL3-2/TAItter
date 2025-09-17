@@ -1,6 +1,4 @@
 <?php
-require_once 'config/database.php';
-
 class Hashtag {
     private $conn;
     private $table_name = "hashtags";

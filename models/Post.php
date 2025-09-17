@@ -1,6 +1,4 @@
 <?php
-require_once 'config/database.php';
-
 class Post {
     private $conn;
     private $table_name = "posts";
@@ -9,7 +7,6 @@ class Post {
     public $user_id;
     public $content;
     public $created_at;
-    public $updated_at;
 
     public function __construct($db) {
         $this->conn = $db;
@@ -37,7 +34,7 @@ class Post {
 
     // Get post by ID with user info
     public function getById($id) {
-        $query = "SELECT p.id, p.user_id, p.content, p.created_at, p.updated_at,
+        $query = "SELECT p.id, p.user_id, p.content, p.created_at,
                          u.username, u.description as user_description
                   FROM " . $this->table_name . " p
                   LEFT JOIN users u ON p.user_id = u.id
@@ -56,7 +53,7 @@ class Post {
 
     // Get posts for timeline (with hashtags and mentions)
     public function getTimeline($user_id, $limit = 20, $offset = 0) {
-        $query = "SELECT DISTINCT p.id, p.user_id, p.content, p.created_at, p.updated_at,
+        $query = "SELECT DISTINCT p.id, p.user_id, p.content, p.created_at,
                          u.username, u.description as user_description
                   FROM " . $this->table_name . " p
                   LEFT JOIN users u ON p.user_id = u.id
@@ -86,7 +83,7 @@ class Post {
 
     // Get posts by user
     public function getByUser($user_id, $limit = 20, $offset = 0) {
-        $query = "SELECT p.id, p.user_id, p.content, p.created_at, p.updated_at,
+        $query = "SELECT p.id, p.user_id, p.content, p.created_at,
                          u.username, u.description as user_description
                   FROM " . $this->table_name . " p
                   LEFT JOIN users u ON p.user_id = u.id
@@ -105,7 +102,7 @@ class Post {
 
     // Get posts by hashtag
     public function getByHashtag($hashtag, $limit = 20, $offset = 0) {
-        $query = "SELECT p.id, p.user_id, p.content, p.created_at, p.updated_at,
+        $query = "SELECT p.id, p.user_id, p.content, p.created_at,
                          u.username, u.description as user_description
                   FROM " . $this->table_name . " p
                   LEFT JOIN users u ON p.user_id = u.id
@@ -126,7 +123,7 @@ class Post {
 
     // Get all posts (for public timeline)
     public function getAll($limit = 20, $offset = 0) {
-        $query = "SELECT p.id, p.user_id, p.content, p.created_at, p.updated_at,
+        $query = "SELECT p.id, p.user_id, p.content, p.created_at,
                          u.username, u.description as user_description
                   FROM " . $this->table_name . " p
                   LEFT JOIN users u ON p.user_id = u.id
@@ -206,7 +203,7 @@ class Post {
 
     // Search posts by content
     public function search($search_term, $limit = 20, $offset = 0) {
-        $query = "SELECT p.id, p.user_id, p.content, p.created_at, p.updated_at,
+        $query = "SELECT p.id, p.user_id, p.content, p.created_at,
                          u.username, u.description as user_description
                   FROM " . $this->table_name . " p
                   LEFT JOIN users u ON p.user_id = u.id

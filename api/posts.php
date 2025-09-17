@@ -1,13 +1,40 @@
 <?php
-require_once '../config/config.php';
-require_once '../config/database.php';
-require_once '../models/Post.php';
-require_once '../models/User.php';
+// Clean up any output buffering and suppress errors in JSON output
+ob_start();
+error_reporting(0); // Suppress PHP errors in JSON responses
+ini_set('display_errors', 0);
 
-$database = new Database();
-$db = $database->getConnection();
-$post = new Post($db);
-$user = new User($db);
+// Get the correct path to the root directory
+$root_path = dirname(__DIR__);
+require_once $root_path . '/config/config.php';
+require_once $root_path . '/config/database.php';
+require_once $root_path . '/models/Post.php';
+require_once $root_path . '/models/User.php';
+
+// Clean the output buffer to ensure no HTML gets mixed with JSON
+ob_clean();
+
+// Set proper JSON headers
+header('Content-Type: application/json; charset=utf-8');
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
+
+// Handle preflight requests
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit();
+}
+
+try {
+    $database = new Database();
+    $db = $database->getConnection();
+    $post = new Post($db);
+    $user = new User($db);
+} catch (Exception $e) {
+    echo json_encode(['error' => 'Database connection failed']);
+    exit();
+}
 
 $method = $_SERVER['REQUEST_METHOD'];
 
@@ -22,7 +49,8 @@ switch($method) {
         handleDelete();
         break;
     default:
-        json_response(['error' => 'Method not allowed'], 405);
+        echo json_encode(['error' => 'Method not allowed']);
+        exit();
 }
 
 function handleGet() {
@@ -32,188 +60,232 @@ function handleGet() {
     $limit = min(intval($_GET['limit'] ?? 20), 100);
     $offset = intval($_GET['offset'] ?? 0);
     
-    switch($action) {
-        case 'timeline':
-            getTimeline($limit, $offset);
-            break;
-        case 'user':
-            getUserPosts($limit, $offset);
-            break;
-        case 'hashtag':
-            getHashtagPosts($limit, $offset);
-            break;
-        case 'search':
-            searchPosts($limit, $offset);
-            break;
-        case 'all':
-            getAllPosts($limit, $offset);
-            break;
-        default:
-            json_response(['error' => 'Invalid action'], 400);
+    try {
+        switch($action) {
+            case 'timeline':
+                getTimeline($limit, $offset);
+                break;
+            case 'user':
+                getUserPosts($limit, $offset);
+                break;
+            case 'hashtag':
+                getHashtagPosts($limit, $offset);
+                break;
+            case 'search':
+                searchPosts($limit, $offset);
+                break;
+            case 'all':
+                getAllPosts($limit, $offset);
+                break;
+            default:
+                echo json_encode(['error' => 'Invalid action']);
+                exit();
+        }
+    } catch (Exception $e) {
+        echo json_encode(['error' => 'Server error']);
+        exit();
     }
 }
 
 function handlePost() {
     global $post;
     
-    // Check if user is logged in
-    if(!is_logged_in()) {
-        json_response(['error' => 'Authentication required'], 401);
-        return;
-    }
-    
-    $data = json_decode(file_get_contents("php://input"));
-    
-    if(empty($data) || empty($data->content)) {
-        json_response(['error' => 'Content is required'], 400);
-        return;
-    }
-    
-    if(strlen($data->content) > 144) {
-        json_response(['error' => 'Post content must be 144 characters or less'], 400);
-        return;
-    }
-    
-    $post->user_id = get_current_user_id();
-    $post->content = trim($data->content);
-    
-    if($post->create()) {
-        // Parse and add hashtags
-        $hashtags = $post->parseHashtags($data->content);
-        if(!empty($hashtags)) {
-            $post->addHashtags($post->id, $hashtags);
+    try {
+        // Check if user is logged in
+        if(!is_logged_in()) {
+            echo json_encode(['error' => 'Authentication required']);
+            exit();
         }
         
-        // Parse and add mentions
-        $mentions = $post->parseMentions($data->content);
-        if(!empty($mentions)) {
-            $post->addMentions($post->id, $mentions);
+        $input = file_get_contents("php://input");
+        $data = json_decode($input);
+        
+        if(empty($data) || empty($data->content)) {
+            echo json_encode(['error' => 'Content is required']);
+            exit();
         }
         
-        // Get the created post with user info
-        $created_post = $post->getById($post->id);
+        if(strlen($data->content) > 144) {
+            echo json_encode(['error' => 'Post content must be 144 characters or less']);
+            exit();
+        }
         
-        json_response([
-            'message' => 'Post created successfully',
-            'post' => $created_post
-        ], 201);
-    } else {
-        json_response(['error' => 'Unable to create post'], 500);
+        $post->user_id = get_current_user_id();
+        $post->content = trim($data->content);
+        
+        if($post->create()) {
+            // Parse and add hashtags
+            $hashtags = $post->parseHashtags($data->content);
+            if(!empty($hashtags)) {
+                $post->addHashtags($post->id, $hashtags);
+            }
+            
+            // Parse and add mentions
+            $mentions = $post->parseMentions($data->content);
+            if(!empty($mentions)) {
+                $post->addMentions($post->id, $mentions);
+            }
+            
+            // Get the created post with user info
+            $created_post = $post->getById($post->id);
+            
+            echo json_encode([
+                'message' => 'Post created successfully',
+                'post' => $created_post
+            ]);
+        } else {
+            echo json_encode(['error' => 'Unable to create post']);
+        }
+    } catch (Exception $e) {
+        echo json_encode(['error' => 'Server error']);
     }
+    exit();
 }
 
 function handleDelete() {
     global $post;
     
-    require_login();
-    
-    $post_id = $_GET['id'] ?? null;
-    
-    if(!$post_id) {
-        json_response(['error' => 'Post ID is required'], 400);
-        return;
+    try {
+        if(!is_logged_in()) {
+            echo json_encode(['error' => 'Authentication required']);
+            exit();
+        }
+        
+        $post_id = $_GET['id'] ?? null;
+        
+        if(!$post_id) {
+            echo json_encode(['error' => 'Post ID is required']);
+            exit();
+        }
+        
+        if($post->delete($post_id, get_current_user_id())) {
+            echo json_encode(['message' => 'Post deleted successfully']);
+        } else {
+            echo json_encode(['error' => 'Unable to delete post']);
+        }
+    } catch (Exception $e) {
+        echo json_encode(['error' => 'Server error']);
     }
-    
-    if($post->delete($post_id, get_current_user_id())) {
-        json_response(['message' => 'Post deleted successfully']);
-    } else {
-        json_response(['error' => 'Unable to delete post or post not found'], 404);
-    }
+    exit();
 }
 
 function getTimeline($limit, $offset) {
     global $post;
     
-    if(!is_logged_in()) {
-        json_response(['error' => 'Authentication required'], 401);
-        return;
+    try {
+        if(!is_logged_in()) {
+            echo json_encode(['error' => 'Authentication required']);
+            exit();
+        }
+        
+        $posts = $post->getTimeline(get_current_user_id(), $limit, $offset);
+        
+        echo json_encode([
+            'posts' => $posts,
+            'count' => count($posts)
+        ]);
+    } catch (Exception $e) {
+        echo json_encode(['error' => 'Failed to load timeline']);
     }
-    
-    $posts = $post->getTimeline(get_current_user_id(), $limit, $offset);
-    
-    json_response([
-        'posts' => $posts,
-        'count' => count($posts)
-    ]);
+    exit();
 }
 
 function getUserPosts($limit, $offset) {
-    global $post;
+    global $post, $user;
     
-    $username = $_GET['username'] ?? null;
-    
-    if(!$username) {
-        json_response(['error' => 'Username is required'], 400);
-        return;
+    try {
+        $username = $_GET['username'] ?? null;
+        
+        if(!$username) {
+            echo json_encode(['error' => 'Username is required']);
+            exit();
+        }
+        
+        if(!$user->getByUsername($username)) {
+            echo json_encode(['error' => 'User not found']);
+            exit();
+        }
+        
+        $posts = $post->getByUser($user->id, $limit, $offset);
+        
+        echo json_encode([
+            'user' => [
+                'id' => $user->id,
+                'username' => $user->username,
+                'description' => $user->description,
+                'created_at' => $user->created_at,
+                'last_login' => $user->last_login
+            ],
+            'posts' => $posts,
+            'count' => count($posts)
+        ]);
+    } catch (Exception $e) {
+        echo json_encode(['error' => 'Failed to load user posts']);
     }
-    
-    $user = new User($GLOBALS['db']);
-    if(!$user->getByUsername($username)) {
-        json_response(['error' => 'User not found'], 404);
-        return;
-    }
-    
-    $posts = $post->getByUser($user->id, $limit, $offset);
-    
-    json_response([
-        'user' => [
-            'id' => $user->id,
-            'username' => $user->username,
-            'description' => $user->description,
-            'created_at' => $user->created_at,
-            'last_login' => $user->last_login
-        ],
-        'posts' => $posts,
-        'count' => count($posts)
-    ]);
+    exit();
 }
 
 function getHashtagPosts($limit, $offset) {
     global $post;
     
-    $hashtag = $_GET['hashtag'] ?? null;
-    
-    if(!$hashtag) {
-        json_response(['error' => 'Hashtag is required'], 400);
-        return;
+    try {
+        $hashtag = $_GET['hashtag'] ?? null;
+        
+        if(!$hashtag) {
+            echo json_encode(['error' => 'Hashtag is required']);
+            exit();
+        }
+        
+        $posts = $post->getByHashtag($hashtag, $limit, $offset);
+        
+        echo json_encode([
+            'hashtag' => $hashtag,
+            'posts' => $posts,
+            'count' => count($posts)
+        ]);
+    } catch (Exception $e) {
+        echo json_encode(['error' => 'Failed to load hashtag posts']);
     }
-    
-    $posts = $post->getByHashtag($hashtag, $limit, $offset);
-    
-    json_response([
-        'hashtag' => $hashtag,
-        'posts' => $posts,
-        'count' => count($posts)
-    ]);
+    exit();
 }
 
 function searchPosts($limit, $offset) {
     global $post;
     
-    $query = $_GET['q'] ?? null;
-    
-    if(!$query) {
-        json_response(['error' => 'Search query is required'], 400);
-        return;
+    try {
+        $query = $_GET['q'] ?? null;
+        
+        if(!$query) {
+            echo json_encode(['error' => 'Search query is required']);
+            exit();
+        }
+        
+        $posts = $post->search($query, $limit, $offset);
+        
+        echo json_encode([
+            'query' => $query,
+            'posts' => $posts,
+            'count' => count($posts)
+        ]);
+    } catch (Exception $e) {
+        echo json_encode(['error' => 'Failed to search posts']);
     }
-    
-    $posts = $post->search($query, $limit, $offset);
-    
-    json_response([
-        'query' => $query,
-        'posts' => $posts,
-        'count' => count($posts)
-    ]);
+    exit();
 }
 
 function getAllPosts($limit, $offset) {
     global $post;
     
-    $posts = $post->getAll($limit, $offset);
-    
-    json_response([
-        'posts' => $posts,
-        'count' => count($posts)
-    ]);
+    try {
+        $posts = $post->getAll($limit, $offset);
+        
+        echo json_encode([
+            'posts' => $posts,
+            'count' => count($posts)
+        ]);
+    } catch (Exception $e) {
+        echo json_encode(['error' => 'Failed to load posts']);
+    }
+    exit();
 }
 ?>
