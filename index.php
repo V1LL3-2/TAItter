@@ -16,13 +16,30 @@ if(is_logged_in()) {
 } else {
     $posts = $post->getAll(20, 0);
 }
+
+// Handle language switching
+if (isset($_GET['lang'])) {
+    set_language($_GET['lang']);
+    // Redirect to remove lang parameter from URL
+    $redirect_url = strtok($_SERVER["REQUEST_URI"], '?');
+    if (!empty($_GET)) {
+        $params = $_GET;
+        unset($params['lang']);
+        if (!empty($params)) {
+            $redirect_url .= '?' . http_build_query($params);
+        }
+    }
+    header("Location: $redirect_url");
+    exit;
+}
+
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="<?php echo $default_language; ?>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TAItter - The Future of Social Media</title>
+    <title>TAItter - <?php echo t('welcome_to'); ?> TAItter</title>
     <link rel="stylesheet" href="assets/css/style.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -41,36 +58,44 @@ if(is_logged_in()) {
                     <nav class="nav">
                         <a href="index.php" class="nav-link active">
                             <i class="fas fa-home"></i>
-                            <span>Home</span>
+                            <span><?php echo t('home'); ?></span>
                         </a>
                         <a href="search.php" class="nav-link">
                             <i class="fas fa-search"></i>
-                            <span>Search</span>
+                            <span><?php echo t('search'); ?></span>
                         </a>
                         <?php if(is_logged_in()): ?>
                             <a href="profile.php" class="nav-link">
                                 <i class="fas fa-user"></i>
-                                <span>Profile</span>
+                                <span><?php echo t('profile'); ?></span>
                             </a>
                             <a href="settings.php" class="nav-link">
                                 <i class="fas fa-cog"></i>
-                                <span>Settings</span>
+                                <span><?php echo t('settings'); ?></span>
                             </a>
                             <a href="api/auth.php" class="nav-link logout-btn" onclick="logout()">
                                 <i class="fas fa-sign-out-alt"></i>
-                                <span>Logout</span>
+                                <span><?php echo t('logout'); ?></span>
                             </a>
                         <?php else: ?>
                             <a href="login.php" class="nav-link">
                                 <i class="fas fa-sign-in-alt"></i>
-                                <span>Login</span>
+                                <span><?php echo t('login'); ?></span>
                             </a>
                             <a href="register.php" class="nav-link">
                                 <i class="fas fa-user-plus"></i>
-                                <span>Register</span>
+                                <span><?php echo t('register'); ?></span>
                             </a>
                         <?php endif; ?>
                     </nav>
+                    
+                    <!-- Language Switcher -->
+                    <div class="language-switcher">
+                        <a href="?<?php echo http_build_query(array_merge($_GET, ['lang' => 'fi'])); ?>" 
+                           class="lang-btn <?php echo $default_language === 'fi' ? 'active' : ''; ?>">FI</a>
+                        <a href="?<?php echo http_build_query(array_merge($_GET, ['lang' => 'en'])); ?>" 
+                           class="lang-btn <?php echo $default_language === 'en' ? 'active' : ''; ?>">EN</a>
+                    </div>
                 </div>
             </div>
         </header>
@@ -83,33 +108,33 @@ if(is_logged_in()) {
                     <aside class="sidebar">
                         <?php if(is_logged_in()): ?>
                             <div class="widget">
-                                <h3>Quick Actions</h3>
+                                <h3><?php echo t('create_post'); ?></h3>
                                 <button class="btn btn-primary btn-full" onclick="openPostModal()">
                                     <i class="fas fa-plus"></i>
-                                    New Post
+                                    <?php echo t('create_post'); ?>
                                 </button>
                             </div>
                             
                             <div class="widget">
-                                <h3>Trending Hashtags</h3>
+                                <h3><?php echo t('hashtags'); ?></h3>
                                 <div id="trending-hashtags">
-                                    <div class="loading">Loading...</div>
+                                    <div class="loading"><?php echo t('loading'); ?>...</div>
                                 </div>
                             </div>
                             
                             <div class="widget">
-                                <h3>Suggested Users</h3>
+                                <h3><?php echo t('users'); ?></h3>
                                 <div id="suggested-users">
-                                    <div class="loading">Loading...</div>
+                                    <div class="loading"><?php echo t('loading'); ?>...</div>
                                 </div>
                             </div>
                         <?php else: ?>
                             <div class="widget">
-                                <h3>Welcome to TAItter</h3>
-                                <p>The future of social media is here! Join our community and start sharing your thoughts in 144 characters or less.</p>
+                                <h3><?php echo t('welcome_to'); ?> TAItter</h3>
+                                <p><?php echo $default_language === 'fi' ? 'Sosiaalisen median tulevaisuus on täällä! Liity yhteisöömme ja ala jakaa ajatuksiasi 144 merkissä tai vähemmän.' : 'The future of social media is here! Join our community and start sharing your thoughts in 144 characters or less.'; ?></p>
                                 <div class="auth-buttons">
-                                    <a href="login.php" class="btn btn-primary">Login</a>
-                                    <a href="register.php" class="btn btn-secondary">Register</a>
+                                    <a href="login.php" class="btn btn-primary"><?php echo t('login'); ?></a>
+                                    <a href="register.php" class="btn btn-secondary"><?php echo t('register'); ?></a>
                                 </div>
                             </div>
                         <?php endif; ?>
@@ -120,14 +145,14 @@ if(is_logged_in()) {
                         <div class="feed-header">
                             <h2>
                                 <?php if(is_logged_in()): ?>
-                                    Your Timeline
+                                    <?php echo $default_language === 'fi' ? 'Aikajana' : 'Your Timeline'; ?>
                                 <?php else: ?>
-                                    Public Feed
+                                    <?php echo $default_language === 'fi' ? 'Julkinen syöte' : 'Public Feed'; ?>
                                 <?php endif; ?>
                             </h2>
                             <button class="btn btn-outline" onclick="refreshFeed()">
                                 <i class="fas fa-sync-alt"></i>
-                                Refresh
+                                <?php echo t('refresh'); ?>
                             </button>
                         </div>
 
@@ -135,8 +160,8 @@ if(is_logged_in()) {
                             <?php if(empty($posts)): ?>
                                 <div class="empty-state">
                                     <i class="fas fa-comments"></i>
-                                    <h3>No posts yet</h3>
-                                    <p>Be the first to share something!</p>
+                                    <h3><?php echo t('no_posts_yet'); ?></h3>
+                                    <p><?php echo $default_language === 'fi' ? 'Ole ensimmäinen, joka jakaa jotain!' : 'Be the first to share something!'; ?></p>
                                 </div>
                             <?php else: ?>
                                 <?php foreach($posts as $post): ?>
@@ -169,11 +194,11 @@ if(is_logged_in()) {
                                         <div class="post-actions">
                                             <button class="action-btn like-user-btn" data-user-id="<?php echo $post['user_id']; ?>">
                                                 <i class="far fa-heart"></i>
-                                                <span>Like User</span>
+                                                <span><?php echo t('like_user'); ?></span>
                                             </button>
                                             <button class="action-btn follow-hashtag-btn" data-hashtags='<?php echo json_encode(extract_hashtags($post['content'])); ?>'>
                                                 <i class="fas fa-hashtag"></i>
-                                                <span>Follow Tags</span>
+                                                <span><?php echo t('follow_tags'); ?></span>
                                             </button>
                                         </div>
                                     </div>
@@ -190,22 +215,22 @@ if(is_logged_in()) {
     <div id="post-modal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>Create New Post</h3>
+                <h3><?php echo t('create_post'); ?></h3>
                 <button class="close-btn" onclick="closePostModal()">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
             <div class="modal-body">
                 <form id="post-form">
-                    <textarea id="post-content" placeholder="What's happening? (144 characters max)" maxlength="144"></textarea>
+                    <textarea id="post-content" placeholder="<?php echo t('whats_happening'); ?>? <?php echo t('characters_max'); ?>" maxlength="144"></textarea>
                     <div class="char-count">
                         <span id="char-count">0</span>/144
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closePostModal()">Cancel</button>
-                <button class="btn btn-primary" onclick="submitPost()">Post</button>
+                <button class="btn btn-secondary" onclick="closePostModal()"><?php echo t('cancel'); ?></button>
+                <button class="btn btn-primary" onclick="submitPost()"><?php echo t('post'); ?></button>
             </div>
         </div>
     </div>
@@ -225,14 +250,15 @@ if(is_logged_in()) {
 
 <?php
 function time_ago($datetime) {
+    global $default_language;
     $time = time() - strtotime($datetime);
     
-    if ($time < 60) return 'just now';
-    if ($time < 3600) return floor($time/60) . 'm ago';
-    if ($time < 86400) return floor($time/3600) . 'h ago';
-    if ($time < 2592000) return floor($time/86400) . 'd ago';
-    if ($time < 31536000) return floor($time/2592000) . 'mo ago';
-    return floor($time/31536000) . 'y ago';
+    if ($time < 60) return t('just_now');
+    if ($time < 3600) return floor($time/60) . ' ' . t('minutes_ago');
+    if ($time < 86400) return floor($time/3600) . ' ' . t('hours_ago');
+    if ($time < 2592000) return floor($time/86400) . ' ' . t('days_ago');
+    if ($time < 31536000) return floor($time/2592000) . ' ' . t('months_ago');
+    return floor($time/31536000) . ' ' . t('years_ago');
 }
 
 function format_post_content($content) {
@@ -253,3 +279,122 @@ function extract_hashtags($content) {
     return $matches[1];
 }
 ?>
+
+<style>
+.header-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 0;
+    gap: 1rem;
+}
+
+.nav {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+    justify-content: center;
+}
+
+.language-switcher {
+    display: flex;
+    gap: 0.25rem;
+    margin-left: auto;
+    padding: 0.25rem;
+    background: var(--background-color);
+    border-radius: var(--border-radius-sm);
+}
+
+.lang-btn {
+    padding: 0.5rem 0.875rem;
+    text-decoration: none;
+    color: var(--text-secondary);
+    border: none;
+    border-radius: calc(var(--border-radius-sm) - 2px);
+    font-size: 0.875rem;
+    font-weight: 600;
+    transition: var(--transition);
+    min-width: 40px;
+    text-align: center;
+}
+
+.lang-btn:hover {
+    background: rgba(29, 161, 242, 0.1);
+    color: var(--primary-color);
+}
+
+.lang-btn.active {
+    background: var(--primary-color);
+    color: white;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+@media (max-width: 768px) {
+    .header-content {
+        flex-wrap: wrap;
+    }
+    
+    .language-switcher {
+        margin-left: 0;
+        order: 3;
+        width: 100%;
+        justify-content: center;
+        margin-top: 0.5rem;
+    }
+    
+    .nav {
+        order: 2;
+    }
+    
+    .logo {
+        order: 1;
+    }
+}
+.user-item {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+    gap: 0.75rem;
+}
+
+.user-item:last-child {
+    border-bottom: none;
+}
+
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex: 1;
+    min-width: 0; /* Important for text overflow */
+}
+
+.user-details {
+    flex: 1;
+    min-width: 0; /* Important for text overflow */
+    overflow: hidden; /* Prevents text overflow */
+}
+
+.username {
+    font-size: 0.9rem;
+    font-weight: 500;
+    text-decoration: none;
+    color: var(--text-primary);
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.user-description {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.4;
+}
+</style>

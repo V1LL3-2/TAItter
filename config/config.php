@@ -77,4 +77,7 @@ function require_login() {
         }
     }
 }
+
+// Add this line after your existing includes
+require_once 'translations.php';
 ?>
